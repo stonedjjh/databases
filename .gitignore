@@ -1,0 +1,12 @@
+# Archivos de seguimiento interno y hojas de ruta personal
+TODO.md
+TODO*.md
+bitacora*.md
+BITACORA*.md
+temp_*
+
+# Archivos de entorno y del sistema
+.env
+.env.*
+.DS_Store
+Thumbs.db
