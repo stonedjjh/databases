@@ -12,5 +12,6 @@ Modulo enfocado en el estudio, administracion y practica con bases de datos rela
 - **MySQL/**:
   - [anatomia-del-almacenamiento.md](MySQL/anatomia-del-almacenamiento.md): Como se traducen bases de datos y tablas a carpetas y archivos `.ibd` en disco.
   - [comandos.md](MySQL/comandos.md): Guia de comandos y funciones del motor (ej. `NOW()`, `@@datadir`).
-  - [consultas.md](MySQL/consultas.md): Estructura de queries, clausula `SELECT` y buenas practicas.
+  - [consultas.md](MySQL/consultas.md): Estructura de queries, clausula `SELECT`, `WHERE`, funciones de agregacion, `GROUP BY` y `HAVING`.
+  - [joins-y-uniones.md](MySQL/joins-y-uniones.md): Cruces relacionales (`INNER`, `LEFT`, `RIGHT JOIN`), algoritmos de ejecucion (*Hash Join* en 8.0) y operadores de conjuntos (`UNION` vs `UNION ALL`).
   - [SQL-Total-12-Dias/](MySQL/SQL-Total-12-Dias/README.md): Apuntes y practicas del curso SQL Total.
