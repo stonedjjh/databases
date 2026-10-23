@@ -9,4 +9,5 @@ Apuntes, ejercicios practicos y sentencias correspondientes al curso.
 
 ## Estructura del Curso
 
-- **dia-01/**: Proximamente.
+- **[Día 05: Consultas SQL (Nivel Intermedio)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/SQL-Total-12-Dias/dia-05.md)**: Subconsultas, condicionales `IF` / `CASE`, conversión `CAST`, funciones de fecha, manipulación de texto y funciones matemáticas.
+

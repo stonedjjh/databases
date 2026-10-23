@@ -61,6 +61,36 @@ En bases de datos relacionales, las consultas de lectura se construyen mediante 
   - [Diferencia Fundamental: WHERE vs HAVING](#diferencia-fundamental-where-vs-having)
   - [Sintaxis y Ejemplos de Negocio](#sintaxis-y-ejemplos-de-negocio)
   - [Buenas Prácticas y Rendimiento: Filtrar Temprano (Pushdown)](#buenas-prácticas-y-rendimiento-filtrar-temprano-pushdown)
+- [9. Subconsultas (Subqueries)](#9-subconsultas-subqueries)
+  - [Tipos de Subconsultas: Escalares, de Fila y de Tabla](#tipos-de-subconsultas-escalares-de-fila-y-de-tabla)
+  - [Subconsultas no Correlacionadas vs Correlacionadas](#subconsultas-no-correlacionadas-vs-correlacionadas)
+  - [Subconsultas con Operadores IN, ANY/SOME y ALL](#subconsultas-con-operadores-in-anysome-y-all)
+  - [Optimización en MySQL 8.0: Subquery Flattening y Semijoins](#optimización-en-mysql-80-subquery-flattening-y-semijoins)
+- [10. Expresiones Condicionales (Control de Flujo)](#10-expresiones-condicionales-control-de-flujo)
+  - [Función IF()](#función-if)
+  - [Función IFNULL() y COALESCE()](#función-ifnull-y-coalesce)
+  - [Expresión CASE (Simple y Buscada)](#expresión-case-simple-y-buscada)
+  - [Uso Práctico: Conteo Condicional y Pivot Básico](#uso-práctico-conteo-condicional-y-pivot-básico)
+- [11. Conversión de Tipos de Datos (CAST y CONVERT)](#11-conversión-de-tipos-de-datos-cast-y-convert)
+  - [Sintaxis y Tipos Destino Permitidos](#sintaxis-y-tipos-destino-permitidos)
+  - [Conversión Explícita vs Coerción Implícita](#conversión-explícita-vs-coerción-implícita)
+  - [Impacto en Rendimiento e Índices](#impacto-en-rendimiento-e-índices)
+- [12. Funciones de Manipulación de Fechas y Tiempo](#12-funciones-de-manipulación-de-fechas-y-tiempo)
+  - [Obtención de Fecha/Hora Actual: NOW(), CURDATE(), CURTIME(), UTC_TIMESTAMP()](#obtención-de-fechahora-actual-now-curdate-curtime-utc_timestamp)
+  - [Extracción de Componentes: YEAR(), MONTH(), DAY(), HOUR(), EXTRACT()](#extracción-de-componentes-year-month-day-hour-extract)
+  - [Aritmética de Intervalos: DATE_ADD(), DATE_SUB(), DATEDIFF(), TIMESTAMPDIFF()](#aritmética-de-intervalos-date_add-date_sub-datediff-timestampdiff)
+  - [Formateo y Parseo: DATE_FORMAT() y STR_TO_DATE()](#formateo-y-parseo-date_format-y-str_to_date)
+  - [Sargabilidad Crítica en Fechas (Evitar Funciones sobre Columnas)](#sargabilidad-crítica-en-fechas-evitar-funciones-sobre-columnas)
+- [13. Manipulación de Cadenas de Texto (String Functions)](#13-manipulación-de-cadenas-de-texto-string-functions)
+  - [Transformación de Mayúsculas/Minúsculas: UPPER(), LOWER()](#transformación-de-mayúsculasminúsculas-upper-lower)
+  - [Extracción y Segmentación: SUBSTRING() / SUBSTR(), LEFT(), RIGHT()](#extracción-y-segmentación-substring--substr-left-right)
+  - [Concatenación: CONCAT() y CONCAT_WS()](#concatenación-concat-y-concat_ws)
+  - [Limpieza y Reemplazo: TRIM(), LTRIM(), RTRIM(), REPLACE()](#limpieza-y-reemplazo-trim-ltrim-rtrim-replace)
+  - [Longitud: LENGTH() vs CHAR_LENGTH() (Bytes vs Caracteres UTF-8)](#longitud-length-vs-char_length-bytes-vs-caracteres-utf-8)
+- [14. Funciones Matemáticas y Numéricas](#14-funciones-matemáticas-y-numéricas)
+  - [Redondeo y Truncamiento: ROUND(), CEILING() / CEIL(), FLOOR(), TRUNCATE()](#redondeo-y-truncamiento-round-ceiling--ceil-floor-truncate)
+  - [Operaciones Básicas y Aritmética: ABS(), MOD() / %, POWER() / POW(), SQRT()](#operaciones-básicas-y-aritmética-abs-mod---power--pow-sqrt)
+  - [Generación Pseudoaleatoria: RAND() y Selección de Filas](#generación-pseudoaleatoria-rand-y-selección-de-filas)
 
 ---
 
@@ -735,5 +765,563 @@ Técnicamente, SQL permite poner condiciones sobre columnas normales en el `HAVI
   WHERE estado_publicacion = 'Activo'
   GROUP BY marca;
   ```
+
+---
+
+## 9. Subconsultas (Subqueries)
+
+Una **subconsulta** (o consulta anidada / interna) es una sentencia `SELECT` incrustada dentro de otra consulta SQL principal (externa). Permiten resolver problemas en varios pasos lógicos: calcular un valor o conjunto dinámico y utilizarlo de inmediato como criterio de filtro, columna proyectada o tabla derivada.
+
+### Tipos de Subconsultas: Escalares, de Fila y de Tabla
+
+Según la dimensionalidad de los datos devueltos por la subconsulta, se clasifican en:
+
+1. **Subconsulta Escalar (1 fila $\times$ 1 columna):**
+   Devuelve un único valor atómico. Puede usarse en cualquier lugar donde se admita un literal o expresión (en el `SELECT`, `WHERE` con operadores `=`, `>`, `<`, o incluso en el `HAVING`).
+   ```sql
+   -- Vehículos cuyo precio supera el promedio general de la flota
+   SELECT id, vin, modelo, precio
+   FROM vehiculos
+   WHERE precio > (
+       SELECT AVG(precio) 
+       FROM vehiculos
+   );
+   ```
+
+2. **Subconsulta de Fila (1 fila $\times$ N columnas):**
+   Devuelve una tupla única. Se compara usando constructores de tuplas `(col1, col2) = (SELECT ...)`.
+   ```sql
+   -- Buscar el vehículo que comparte la misma marca y año que el prototipo con ID 10
+   SELECT id, modelo, marca, anio
+   FROM vehiculos
+   WHERE (marca, anio) = (
+       SELECT marca, anio 
+       FROM vehiculos 
+       WHERE id = 10
+   );
+   ```
+
+3. **Subconsulta de Tabla / Conjunto (N filas $\times$ M columnas):**
+   Devuelve un conjunto tabular. Se utiliza comúnmente con operadores de conjuntos (`IN`, `NOT IN`, `EXISTS`) o como tabla derivada en la cláusula `FROM` (en cuyo caso **es obligatorio asignarle un alias**).
+   ```sql
+   -- Tabla derivada en el FROM (subconsulta como vista en memoria)
+   SELECT resumen.marca, resumen.total_stock
+   FROM (
+       SELECT marca, COUNT(*) AS total_stock
+       FROM vehiculos
+       WHERE estado = 'Disponible'
+       GROUP BY marca
+   ) AS resumen
+   WHERE resumen.total_stock > 5;
+   ```
+
+---
+
+### Subconsultas no Correlacionadas vs Correlacionadas
+
+La diferencia más crítica para el rendimiento radica en cómo interactúa la consulta interna con la externa:
+
+#### 1. Subconsulta No Correlacionada (Independiente)
+La subconsulta interna es totalmente autónoma; no hace referencia a ninguna columna de la consulta externa. El motor la ejecuta **una única vez**, almacena en caché su resultado y luego evalúa la consulta externa contra dicho valor o conjunto.
+
+```sql
+-- La subconsulta interna corre una sola vez:
+SELECT id, nombre, email
+FROM clientes
+WHERE id IN (
+    SELECT DISTINCT cliente_id 
+    FROM ventas 
+    WHERE fecha_venta >= '2026-01-01'
+);
+```
+
+#### 2. Subconsulta Correlacionada (Dependiente fila a fila)
+La subconsulta interna hace referencia a una columna de la fila actual que está siendo evaluada en la consulta externa. Por tanto, conceptualmente el motor debe ejecutar la subconsulta **una vez por cada fila candidata** de la consulta externa.
+
+```sql
+-- Obtener vehículos cuyo precio es superior al promedio de SU PROPIA MARCA:
+SELECT v1.id, v1.marca, v1.modelo, v1.precio
+FROM vehiculos AS v1
+WHERE v1.precio > (
+    SELECT AVG(v2.precio)
+    FROM vehiculos AS v2
+    WHERE v2.marca = v1.marca -- Correlación con la fila exterior
+);
+```
+
+> [!WARNING]
+> En conjuntos de datos masivos ($N > 100.000$), las subconsultas correlacionadas mal optimizadas pueden degradarse a una complejidad $O(N \times M)$ similar a un bucle anidado. Siempre que sea posible, evalúa reescribirlas mediante un `JOIN` con una tabla agregada previa o mediante Funciones Ventana (*Window Functions*).
+
+---
+
+### Subconsultas con Operadores IN, ANY/SOME y ALL
+
+Cuando una subconsulta devuelve una lista de valores (1 columna, múltiples filas), se evalúa con operadores específicos:
+
+- **`IN`**: Verdadero si el valor coincide con al menos un elemento del conjunto devuelto.
+- **`ANY` / `SOME`**: Compara un valor contra cada elemento usando un operador relacional (`>`, `<`, `=`, `>=`). Es verdadero si la condición se cumple para **al menos uno**.
+  - `> ANY (...)`: Mayor que el valor mínimo devuelto.
+  - `< ANY (...)`: Menor que el valor máximo devuelto.
+- **`ALL`**: Verdadero únicamente si la condición se cumple para **todos y cada uno** de los elementos devueltos.
+  - `> ALL (...)`: Mayor que el valor máximo absoluto del subconjunto.
+  - `< ALL (...)`: Menor que el valor mínimo absoluto del subconjunto.
+
+```sql
+-- Vehículos que cuestan más que TODOS los vehículos de la marca 'Fiat'
+SELECT modelo, marca, precio
+FROM vehiculos
+WHERE precio > ALL (
+    SELECT precio 
+    FROM vehiculos 
+    WHERE marca = 'Fiat' AND precio IS NOT NULL
+);
+```
+
+---
+
+### Optimización en MySQL 8.0: Subquery Flattening y Semijoins
+
+Antiguamente (MySQL 5.6 e inferiores), las subconsultas con `IN` sufrían graves problemas de rendimiento porque el optimizador las transformaba internamente en subconsultas correlacionadas lentas.
+
+En **MySQL 8.0**, el optimizador implementa técnicas avanzadas de transformación:
+1. **Subquery Flattening / Unnesting:** Reescribe internamente la subconsulta en un `JOIN` equivalente cuando es matemáticamente seguro.
+2. **Semi-joins:** Para subconsultas `WHERE col IN (SELECT ...)` o `WHERE EXISTS (...)`, el optimizador detiene la búsqueda de la tabla interna en la primera coincidencia (no necesita recorrer duplicados ni crear el producto cartesiano), aplicando estrategias como *FirstMatch*, *Materialize*, o *LooseScan*.
+
+---
+
+## 10. Expresiones Condicionales (Control de Flujo)
+
+SQL proporciona mecanismos para evaluar lógica condicional (tipo `if / else`) directamente en las proyecciones o filtros de las consultas.
+
+### Función IF()
+
+Exclusiva de motores MySQL/MariaDB. Evalúa una condición booleana y devuelve un valor si es verdadera y otro si es falsa.
+
+```sql
+IF(condicion_booleana, valor_si_verdadero, valor_si_falso)
+```
+
+```sql
+-- Clasificar disponibilidad comercial
+SELECT 
+    vin, 
+    modelo, 
+    precio,
+    IF(stock > 0, 'Disponible', 'Agotado') AS estado_inventario
+FROM vehiculos;
+```
+
+---
+
+### Función IFNULL() y COALESCE()
+
+Fundamentales para el tratamiento defensivo de valores `NULL` sin romper la presentación de datos ni arrojar valores vacíos:
+
+- **`IFNULL(expresion, valor_alternativo)`**: Función binaria de MySQL. Si `expresion` es `NULL`, retorna el valor alternativo; de lo contrario retorna `expresion`.
+- **`COALESCE(val1, val2, val3, ...)`**: Estándar ANSI SQL. Acepta múltiples argumentos y retorna el **primer valor no nulo** de la lista.
+
+```sql
+SELECT 
+    id,
+    nombre,
+    IFNULL(telefono, 'Sin teléfono registrado') AS telefono_contacto,
+    COALESCE(telefono_movil, telefono_fijo, email, 'Incontactable') AS mejor_contacto
+FROM clientes;
+```
+
+---
+
+### Expresión CASE (Simple y Buscada)
+
+El estándar industrial más potente y portable en SQL para estructuras condicionales complejas. Posee dos formas:
+
+#### 1. CASE Simple (Comparación por Igualdad)
+Compara una expresión única contra valores literales específicos:
+
+```sql
+SELECT 
+    modelo,
+    estado_codigo,
+    CASE estado_codigo
+        WHEN 'D' THEN 'Disponible'
+        WHEN 'R' THEN 'Reservado'
+        WHEN 'V' THEN 'Vendido'
+        WHEN 'M' THEN 'En Mantenimiento'
+        ELSE 'Desconocido'
+    END AS estado_descripcion
+FROM vehiculos;
+```
+
+#### 2. CASE Buscado (Searched CASE - Evaluación por Expresiones Booleanas)
+Permite evaluar condiciones arbitrarias e independientes en cada rama `WHEN` (rangos, combinaciones lógicas con `AND`/`OR`, etc.):
+
+```sql
+SELECT 
+    modelo,
+    precio,
+    CASE 
+        WHEN precio >= 80000 THEN 'Gama Alta / Premium'
+        WHEN precio BETWEEN 35000 AND 79999 THEN 'Gama Media'
+        WHEN precio < 35000 THEN 'Gama Entrada / Económico'
+        ELSE 'Precio no asignado'
+    END AS categoria_precio
+FROM vehiculos;
+```
+
+> [!IMPORTANT]
+> Recuerda incluir siempre la cláusula `ELSE`. Si ninguna condición `WHEN` se cumple y no existe `ELSE`, el motor retornará `NULL` de forma silenciosa.
+
+---
+
+### Uso Práctico: Conteo Condicional y Pivot Básico
+
+Una de las técnicas más elegantes y utilizadas en analítica de datos relacionales es combinar funciones de agregación (`SUM`, `COUNT`) con `CASE` o `IF` para transformar filas en columnas (pivot tabular):
+
+```sql
+-- Resumen ejecutivo de vehículos por marca y categoría en una sola fila por marca
+SELECT 
+    marca,
+    COUNT(*) AS total_vehiculos,
+    SUM(IF(precio >= 50000, 1, 0)) AS total_premium,
+    SUM(IF(precio < 50000, 1, 0)) AS total_estandar,
+    ROUND(AVG(CASE WHEN estado = 'Disponible' THEN precio END), 2) AS precio_promedio_disponibles
+FROM vehiculos
+GROUP BY marca;
+```
+
+---
+
+## 11. Conversión de Tipos de Datos (CAST y CONVERT)
+
+En ocasiones es indispensable transformar explícitamente el tipo de dato de una columna o expresión para evitar incompatibilidades de tipos, formatear salidas o garantizar precisión en operaciones aritméticas.
+
+### Sintaxis y Tipos Destino Permitidos
+
+ANSI SQL y MySQL ofrecen `CAST()` y `CONVERT()`:
+
+```sql
+CAST(expresion AS tipo_destino)
+CONVERT(expresion, tipo_destino)
+```
+
+En MySQL, los tipos destino para `CAST` deben ser de una lista específica admitida:
+- `BINARY[(N)]`: Cadena binaria de bytes.
+- `CHAR[(N)]`: Cadena de texto fija/variable.
+- `DATE`: Formato de fecha `YYYY-MM-DD`.
+- `DATETIME`: Fecha y hora `YYYY-MM-DD HH:MM:SS`.
+- `TIME`: Formato horario `HH:MM:SS`.
+- `DECIMAL[(M[, D])]`: Número de punto fijo de alta precisión (ideal para finanzas/moneda).
+- `SIGNED [INTEGER]`: Entero con signo (positivo o negativo de 64 bits).
+- `UNSIGNED [INTEGER]`: Entero sin signo (solo positivos de 64 bits).
+- `JSON`: Documento JSON nativo (MySQL 5.7+ / 8.0+).
+
+```sql
+-- Forzar división exacta a formato decimal de 2 cifras
+SELECT 
+    id,
+    CAST(precio AS DECIMAL(10, 2)) AS precio_monetario,
+    CAST(anio AS CHAR(4)) AS anio_texto,
+    CAST('2026-10-22' AS DATE) AS fecha_convertida
+FROM vehiculos;
+```
+
+---
+
+### Conversión Explícita vs Coerción Implícita
+
+Cuando comparas o combinas datos de tipos incompatibles (por ejemplo, comparar una columna `VARCHAR` contra un número entero), MySQL ejecuta una **conversión implícita de tipos (type coercion)**:
+
+```sql
+-- PELIGROSO: telefono es VARCHAR(20), pero se compara contra un entero
+SELECT * FROM clientes WHERE telefono = 12345678;
+```
+
+Para evaluar esta comparación, MySQL convierte **cada valor de la columna `telefono` a número** antes de comparar con `12345678`.
+
+---
+
+### Impacto en Rendimiento e Índices
+
+> [!CAUTION]
+> **La regla de oro de la Sargabilidad en conversiones:**  
+> La coerción implícita sobre una columna indexada o envolverla en un `CAST(columna AS ...)` **invalida completamente el uso de índices B+ Tree**, degradando la búsqueda a un escaneo completo de la tabla (*Full Table Scan*).
+> 
+> - **Inadecuado (Rompe el índice en columna VARCHAR):**
+>   ```sql
+>   SELECT * FROM vehiculos WHERE vin = 100245; -- Fuerza conversión en cada fila
+>   ```
+> - **Correcto (Sargable, preserva índice):**
+>   ```sql
+>   SELECT * FROM vehiculos WHERE vin = '100245'; -- Mismo tipo exacto
+>   ```
+
+---
+
+## 12. Funciones de Manipulación de Fechas y Tiempo
+
+El manejo temporal es crítico en cualquier aplicación comercial (auditoría, facturación, vencimientos, métricas de retención).
+
+### Obtención de Fecha/Hora Actual
+
+| Función | Tipo de Retorno | Descripción |
+| :--- | :--- | :--- |
+| `NOW()` / `CURRENT_TIMESTAMP()` | `DATETIME` | Fecha y hora actual del servidor de BD. |
+| `CURDATE()` / `CURRENT_DATE()` | `DATE` | Fecha actual (`YYYY-MM-DD`). |
+| `CURTIME()` / `CURRENT_TIME()` | `TIME` | Hora actual (`HH:MM:SS`). |
+| `UTC_TIMESTAMP()` | `DATETIME` | Fecha y hora actual en zona horaria UTC (estándar para microservicios globales). |
+
+```sql
+SELECT 
+    NOW() AS hora_local,
+    UTC_TIMESTAMP() AS hora_utc,
+    CURDATE() AS solo_fecha;
+```
+
+---
+
+### Extracción de Componentes
+
+Permiten descomponer una fecha en sus elementos individuales:
+
+```sql
+SELECT 
+    fecha_venta,
+    YEAR(fecha_venta) AS anio,
+    MONTH(fecha_venta) AS mes,
+    DAY(fecha_venta) AS dia,
+    HOUR(fecha_venta) AS hora,
+    DAYOFWEEK(fecha_venta) AS dia_semana, -- 1 = Domingo, 7 = Sábado
+    EXTRACT(QUARTER FROM fecha_venta) AS trimestre
+FROM ventas;
+```
+
+---
+
+### Aritmética de Intervalos
+
+Para sumar o restar tiempo de forma segura respetando años bisiestos y cambios de mes:
+
+- **`DATE_ADD(fecha, INTERVAL valor unidad)`**: Suma un periodo temporal.
+- **`DATE_SUB(fecha, INTERVAL valor unidad)`**: Resta un periodo temporal.
+- **`DATEDIFF(fecha1, fecha2)`**: Devuelve la diferencia en **días enteros** (`fecha1 - fecha2`).
+- **`TIMESTAMPDIFF(unidad, fecha1, fecha2)`**: Diferencia precisa en la unidad solicitada (`SECOND`, `MINUTE`, `HOUR`, `DAY`, `MONTH`, `YEAR`).
+
+```sql
+-- Calcular garantía de 2 años y vencimiento de seguro en 30 días
+SELECT 
+    id,
+    fecha_venta,
+    DATE_ADD(fecha_venta, INTERVAL 2 YEAR) AS fin_garantia,
+    DATE_ADD(fecha_venta, INTERVAL 30 DAY) AS recordatorio_primer_control,
+    DATEDIFF(CURDATE(), fecha_venta) AS dias_transcurridos_desde_venta,
+    TIMESTAMPDIFF(MONTH, fecha_venta, CURDATE()) AS meses_antiguedad
+FROM ventas;
+```
+
+---
+
+### Formateo y Parseo: DATE_FORMAT() y STR_TO_DATE()
+
+- **`DATE_FORMAT(fecha, patron)`**: Convierte una fecha nativa en un string legible según especificadores de formato (`%d` día, `%m` mes numérico, `%M` nombre del mes, `%Y` año 4 dígitos, `%H` hora 24h, `%i` minutos).
+- **`STR_TO_DATE(string, patron)`**: Parsea una cadena de texto a un tipo `DATE`/`DATETIME` nativo.
+
+```sql
+-- Formato latino/europeo legible para reportes
+SELECT 
+    fecha_venta,
+    DATE_FORMAT(fecha_venta, '%d/%m/%Y %H:%i') AS fecha_formateada,
+    DATE_FORMAT(fecha_venta, '%W, %d de %M de %Y') AS formato_largo
+FROM ventas;
+
+-- Convertir input de un archivo CSV o API externa en fecha válida
+SELECT STR_TO_DATE('23-10-2026 14:30', '%d-%m-%Y %H:%i') AS fecha_parseada;
+```
+
+---
+
+### Sargabilidad Crítica en Fechas (Evitar Funciones sobre Columnas)
+
+> [!CAUTION]
+> **Antipatrón de Desempeño en Fechas:**  
+> Aplicar funciones (`YEAR()`, `DATE()`, `DATE_FORMAT()`) sobre la columna en la cláusula `WHERE` impide al optimizador utilizar un índice existente sobre dicha columna.
+> 
+> - **Incorrecto (Full Table Scan inevitable):**
+>   ```sql
+>   -- El motor debe calcular YEAR() para cada fila física de la tabla:
+>   SELECT * FROM ventas WHERE YEAR(fecha_venta) = 2026;
+>   ```
+> - **Correcto (Sargable - Rango Indexado O(log N)):**
+>   ```sql
+>   -- El optimizador aprovecha el índice B+Tree entre dos cotas fijas:
+>   SELECT * FROM ventas 
+>   WHERE fecha_venta >= '2026-01-01 00:00:00' 
+>     AND fecha_venta < '2027-01-01 00:00:00';
+>   ```
+
+---
+
+## 13. Manipulación de Cadenas de Texto (String Functions)
+
+Las funciones de strings son esenciales para estandarizar, sanitizar y transformar datos de texto en MySQL.
+
+### Transformación de Mayúsculas y Minúsculas
+
+- `UPPER(str)` o `UCASE(str)`: Convierte el texto a mayúsculas.
+- `LOWER(str)` o `LCASE(str)`: Convierte el texto a minúsculas.
+
+```sql
+SELECT 
+    nombre,
+    UPPER(nombre) AS nombre_mayusculas,
+    LOWER(email) AS email_estandarizado
+FROM clientes;
+```
+
+---
+
+### Extracción y Segmentación
+
+- **`SUBSTRING(str, pos, len)`** o **`SUBSTR(...)`**: Extrae una porción del texto comenzando en la posición `pos` (en SQL las cadenas **empiezan en el índice 1**, no en 0) con longitud opcional `len`.
+- **`LEFT(str, len)`**: Extrae los primeros `len` caracteres de la izquierda.
+- **`RIGHT(str, len)`**: Extrae los últimos `len` caracteres de la derecha.
+
+```sql
+SELECT 
+    vin,
+    LEFT(vin, 3) AS codigo_fabricante_wmi,
+    SUBSTRING(vin, 10, 1) AS digito_anio_modelo,
+    RIGHT(vin, 6) AS numero_secuencial_chasis
+FROM vehiculos;
+```
+
+---
+
+### Concatenación: CONCAT() y CONCAT_WS()
+
+- **`CONCAT(str1, str2, ...)`**: Une dos o más cadenas.  
+  *(Cuidado: Si cualquiera de los argumentos es `NULL`, `CONCAT()` retornará `NULL` en toda la expresión).*
+- **`CONCAT_WS(separador, str1, str2, ...)`**: *Concatenate With Separator*. El primer parámetro es el separador. Salta automáticamente los valores `NULL` sin arruinar la concatenación.
+
+```sql
+-- Uso de CONCAT_WS para generar nombres y direcciones seguras frente a NULLs
+SELECT 
+    id,
+    CONCAT_WS(' ', primer_nombre, segundo_nombre, apellido) AS nombre_completo,
+    CONCAT_WS(', ', calle, ciudad, provincia, codigo_postal) AS direccion_envio
+FROM clientes;
+```
+
+---
+
+### Limpieza y Reemplazo
+
+- **`TRIM([remstr FROM] str)`**: Elimina espacios en blanco (o caracteres especificados) al inicio y al final.
+- **`LTRIM(str)`** / **`RTRIM(str)`**: Elimina espacios únicamente a la izquierda o derecha.
+- **`REPLACE(str, from_str, to_str)`**: Reemplaza todas las ocurrencias de una subcadena por otra.
+
+```sql
+-- Sanitizar teléfonos y eliminar prefijos o caracteres no deseados
+SELECT 
+    TRIM(nombre) AS nombre_limpio,
+    REPLACE(REPLACE(telefono, '-', ''), ' ', '') AS telefono_normalizado
+FROM clientes;
+```
+
+---
+
+### Longitud: LENGTH() vs CHAR_LENGTH()
+
+Comprender la diferencia es vital cuando se trabaja con el conjunto de caracteres `utf8mb4` (estándar moderno de MySQL con soporte multilingüe y emojis):
+
+- **`LENGTH(str)`**: Retorna la longitud en **bytes**.
+- **`CHAR_LENGTH(str)`** o `CHARACTER_LENGTH()`: Retorna la longitud en **número de caracteres**.
+
+```sql
+-- Carácter con tilde (é) o Emoji (🚗) ocupa más de 1 byte en UTF-8:
+SELECT 
+    LENGTH('Camión') AS bytes_camion,          -- Retorna 7 (la 'ó' ocupa 2 bytes)
+    CHAR_LENGTH('Camión') AS caracteres_camion, -- Retorna 6
+
+    LENGTH('🚗') AS bytes_auto,                -- Retorna 4 bytes
+    CHAR_LENGTH('🚗') AS caracteres_auto;      -- Retorna 1 carácter
+```
+
+> [!TIP]
+> Para validaciones de formularios y límites de entrada del usuario (ejemplo: "máximo 50 caracteres"), usa siempre `CHAR_LENGTH()`.
+
+---
+
+## 14. Funciones Matemáticas y Numéricas
+
+MySQL incorpora un amplio repertorio de funciones aritméticas y estadísticas para cálculos directos en el motor sin sobrecargar el backend.
+
+### Redondeo y Truncamiento
+
+- **`ROUND(num, decimales)`**: Redondeo matemático tradicional (al entero o al número de decimales especificado).
+- **`CEILING(num)`** o **`CEIL(num)`**: Devuelve el entero más pequeño mayor o igual que el argumento (redondeo siempre hacia arriba).
+- **`FLOOR(num)`**: Devuelve el entero más grande menor o igual que el argumento (redondeo siempre hacia abajo).
+- **`TRUNCATE(num, decimales)`**: Corta el número al número de decimales indicado sin redondear.
+
+```sql
+SELECT 
+    precio,
+    ROUND(precio, 1) AS redondeo_1_decimal,
+    CEILING(precio) AS techo_entero,
+    FLOOR(precio) AS piso_entero,
+    TRUNCATE(precio, 1) AS truncado_sin_redondeo
+FROM vehiculos;
+```
+
+---
+
+### Operaciones Básicas y Aritmética
+
+- **`ABS(x)`**: Valor absoluto de un número.
+- **`MOD(n, m)`** o **`%`**: Resto de la división entera (módulo).
+- **`POWER(x, y)`** o **`POW(x, y)`**: Eleva $x$ a la potencia $y$.
+- **`SQRT(x)`**: Raíz cuadrada de $x$.
+
+```sql
+-- Ejemplo de cálculo de dispersión o métricas de inventario
+SELECT 
+    id,
+    modelo,
+    precio,
+    ABS(precio - 50000) AS desviacion_respecto_objetivo,
+    MOD(id, 2) AS es_id_impar
+FROM vehiculos;
+```
+
+---
+
+### Generación Pseudoaleatoria: RAND() y Selección de Filas
+
+La función `RAND([semilla])` devuelve un número flotante pseudoaleatorio entre `0` (inclusive) y `1` (exclusivo).
+
+```sql
+-- Generar un número entero aleatorio entre 1 y 100:
+SELECT FLOOR(1 + RAND() * 100) AS numero_sorteo;
+```
+
+#### Trampa de Rendimiento: Ordenar Filas al Azar con `ORDER BY RAND()`
+
+Un patrón muy común en principiantes para obtener filas al azar es:
+
+```sql
+-- ANTIPATRÓN SEVERO EN TABLAS GRANDES:
+SELECT * FROM vehiculos 
+ORDER BY RAND() 
+LIMIT 1;
+```
+
+> [!CAUTION]
+> `ORDER BY RAND()` obliga a MySQL a generar un número aleatorio para **todas las filas de la tabla**, copiar toda la tabla a una tabla temporal en memoria/disco, ejecutar un ordenamiento completo (`filesort`) y luego tomar la primera fila. En una tabla de $500.000$ registros, esta consulta puede congelar la base de datos durante segundos.
+> 
+> **Alternativa Profesional:**  
+> Calcular un ID aleatorio en la capa de backend dentro del rango `[MIN(id), MAX(id)]` y hacer una consulta sargable indexada:
+> ```sql
+> SELECT * FROM vehiculos WHERE id >= :id_aleatorio_calculado ORDER BY id ASC LIMIT 1;
+> ```
+
 
 
