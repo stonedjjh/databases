@@ -8,6 +8,7 @@ Guía de referencia rápida de comandos, funciones de uso frecuente y variables 
 
 ## Índice de Contenido
 
+- [0. Taxonomía Formal de Comandos SQL (DDL, DML, DQL, DCL, TCL)](#0-taxonomía-formal-de-comandos-sql-ddl-dml-dql-dcl-tcl)
 - [1. Funciones de Fecha y Hora](#1-funciones-de-fecha-y-hora)
   - [`NOW()`](#now)
 - [2. Variables de Sistema y Diagnóstico (`@@`)](#2-variables-de-sistema-y-diagnóstico-)
@@ -15,6 +16,21 @@ Guía de referencia rápida de comandos, funciones de uso frecuente y variables 
   - [`@@datadir`](#datadir)
   - [`@@lower_case_table_names`](#lower_case_table_names)
 - [3. Diagnóstico Rápido de Sesión y Servidor](#3-diagnóstico-rápido-de-sesión-y-servidor)
+
+---
+
+## 0. Taxonomía Formal de Comandos SQL (DDL, DML, DQL, DCL, TCL)
+
+Para consultar el análisis exhaustivo sobre cómo se clasifican las sentencias de SQL, sus implicaciones en memoria y almacenamiento físico, los riesgos de **auto-commit implícito** y el control de privilegios, consulta la guía dedicada:
+
+> [!NOTE]
+> Guía especializada: [**Taxonomía del Lenguaje SQL: DDL, DML, DQL, DCL y TCL**](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md).
+>
+> - **[DDL (Definición)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#2-ddl-data-definition-language---definición-de-estructura):** `CREATE`, `ALTER`, `DROP`, `TRUNCATE` (impacto en catálogo e irreversibilidad).
+> - **[DML (Manipulación)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#3-dml-data-manipulation-language---manipulación-de-datos):** `INSERT`, `UPDATE`, `DELETE`, `ON DUPLICATE KEY UPDATE` y `sql_safe_updates`.
+> - **[DQL (Consulta)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#4-dql-data-query-language---recuperación-de-información):** `SELECT` y su orden lógico de procesamiento interno.
+> - **[TCL (Transacciones)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#5-tcl-transaction-control-language---control-transaccional):** `START TRANSACTION`, `COMMIT`, `ROLLBACK` y `SAVEPOINT`.
+> - **[DCL (Control y Seguridad)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#6-dcl-data-control-language---seguridad-y-privilegios):** `CREATE USER`, `GRANT`, `REVOKE` y el principio de menor privilegio.
 
 ---
 
