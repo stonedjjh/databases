@@ -15,6 +15,7 @@ Guía técnica avanzada sobre la implementación de lógica de negocio transacci
   - [El Delimitador de Comandos (`DELIMITER`)](#el-delimitador-de-comandos-delimiter)
   - [Parámetros: `IN`, `OUT` e `INOUT`](#parámetros-in-out-e-inout)
   - [Variables Locales (`DECLARE`), Asignación y Estructuras de Control (`IF`, `CASE`)](#variables-locales-declare-asignación-y-estructuras-de-control-if-case)
+  - [Etiquetas y Control de Salida (`LEAVE` e `ITERATE`)](#etiquetas-y-control-de-salida-leave-e-iterate)
   - [Manejo de Errores Profesional (`DECLARE ... HANDLER FOR SQLEXCEPTION`)](#manejo-de-errores-profesional-declare--handler-for-sqlexception)
 - [2. Transacciones ACID Bajo el Capó (Mecánica de InnoDB)](#2-transacciones-acid-bajo-el-capó-mecánica-de-innodb)
   - [Desglose Físico de ACID: Atomicidad, Consistencia, Aislamiento y Durabilidad](#desglose-físico-de-acid-atomicidad-consistencia-aislamiento-y-durabilidad)
@@ -132,6 +133,89 @@ BEGIN
     ELSE
         SET p_categoria = 'STANDARD';
     END IF;
+END //
+
+DELIMITER ;
+```
+
+---
+
+### Etiquetas y Control de Salida (`LEAVE` e `ITERATE`)
+
+En MySQL Stored Procedures **no existe la sentencia `RETURN`** (la cual está reservada exclusivamente para `FUNCTION`). Para interrumpir un procedimiento de forma anticipada ante una validación fallida o romper un ciclo iterativo, se utilizan **bloques etiquetados (`label:`)** combinados con la sentencia **`LEAVE`**.
+
+#### 1. `LEAVE` como Retorno Anticipado (*Early Return*)
+
+Para evitar anidar infinitos bloques `IF ... ELSE`, se etiqueta el bloque principal `BEGIN ... END` y se ejecuta `LEAVE` cuando se incumple una precondición de negocio:
+
+```sql
+DELIMITER //
+
+CREATE PROCEDURE registrar_cliente_seguro(
+    IN p_nombre VARCHAR(100),
+    IN p_edad INT,
+    OUT p_codigo_respuesta INT,
+    OUT p_mensaje VARCHAR(100)
+)
+proc_principal: BEGIN -- << 1. Se define una etiqueta para el bloque principal
+
+    -- Validación 1: Datos incompletos
+    IF p_nombre IS NULL OR TRIM(p_nombre) = '' THEN
+        SET p_codigo_respuesta = 400;
+        SET p_mensaje = 'El nombre no puede estar vacío.';
+        LEAVE proc_principal; -- << Interrumpe y salta directo al END proc_principal
+    END IF;
+
+    -- Validación 2: Regla de edad mínima
+    IF p_edad < 18 THEN
+        SET p_codigo_respuesta = 403;
+        SET p_mensaje = 'El cliente debe ser mayor de edad para operar.';
+        LEAVE proc_principal; -- << Sale de inmediato sin ejecutar el INSERT
+    END IF;
+
+    -- Flujo exitoso (solo se alcanza si pasó todas las validaciones previas)
+    INSERT INTO clientes (nombre, edad, fecha_alta) 
+    VALUES (p_nombre, p_edad, NOW());
+
+    SET p_codigo_respuesta = 200;
+    SET p_mensaje = 'Cliente registrado exitosamente.';
+
+END proc_principal // -- << Fin del bloque etiquetado
+
+DELIMITER ;
+```
+
+#### 2. `LEAVE` vs `ITERATE` en Bucles (`break` vs `continue`)
+
+Cuando se utilizan bucles estructurados (`LOOP`, `WHILE`, `REPEAT`):
+
+- **`LEAVE etiqueta;`**: Rompe el bucle por completo y sale de él (equivalente a **`break`** en la mayoría de lenguajes).
+- **`ITERATE etiqueta;`**: Cancela la vuelta actual del bucle y salta inmediatamente a la siguiente iteración (equivalente a **`continue`**).
+
+```sql
+DELIMITER //
+
+CREATE PROCEDURE procesar_pagos_lote()
+BEGIN
+    DECLARE v_contador INT DEFAULT 0;
+
+    bucle_pagos: LOOP
+        SET v_contador = v_contador + 1;
+
+        -- Romper el bucle cuando llegue a 10 (break)
+        IF v_contador > 10 THEN
+            LEAVE bucle_pagos;
+        END IF;
+
+        -- Omitir el número 5 y saltar directo a la siguiente vuelta (continue)
+        IF v_contador = 5 THEN
+            ITERATE bucle_pagos;
+        END IF;
+
+        -- Procesar pago para el índice actual (nunca se ejecuta para el 5)
+        INSERT INTO log_pagos (numero_iteracion) VALUES (v_contador);
+
+    END LOOP bucle_pagos;
 END //
 
 DELIMITER ;
