@@ -32,6 +32,9 @@ Para consultar el análisis exhaustivo sobre cómo se clasifican las sentencias 
 > - **[TCL (Transacciones)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#5-tcl-transaction-control-language---control-transaccional):** `START TRANSACTION`, `COMMIT`, `ROLLBACK` y `SAVEPOINT`.
 > - **[DCL (Control y Seguridad)](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/lenguaje-sql-ddl-dml-dcl-tcl.md#6-dcl-data-control-language---seguridad-y-privilegios):** `CREATE USER`, `GRANT`, `REVOKE` y el principio de menor privilegio.
 
+> [!NOTE]
+> Para la implementación avanzada de lógica procedural y control de transacciones complejas, consulta: [**Procedimientos Almacenados, Transacciones ACID y Control de Concurrencia**](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/procedimientos-almacenados-y-transacciones.md) (incluye `DELIMITER`, `HANDLERS`, niveles de aislamiento, bloqueos pesimistas `FOR UPDATE` y prevención de Deadlocks).
+
 ---
 
 ## 1. Funciones de Fecha y Hora
