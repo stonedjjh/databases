@@ -35,6 +35,9 @@ Para consultar el análisis exhaustivo sobre cómo se clasifican las sentencias 
 > [!NOTE]
 > Para la implementación avanzada de lógica procedural y control de transacciones complejas, consulta: [**Procedimientos Almacenados, Transacciones ACID y Control de Concurrencia**](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/procedimientos-almacenados-y-transacciones.md) (incluye `DELIMITER`, `HANDLERS`, niveles de aislamiento, bloqueos pesimistas `FOR UPDATE` y prevención de Deadlocks).
 
+> [!NOTE]
+> Para la abstracción lógica de datos, seguridad por proyección y automatización de eventos, consulta: [**Vistas, Vistas Materializadas y Triggers**](file:///c:/Bases%20de%20Datos/Relacionales/MySQL/vistas-y-triggers.md) (incluye comparativa Vista vs CTE, `WITH CHECK OPTION`, emulación de vistas materializadas y auditoría con pseudorregistros `NEW`/`OLD`).
+
 ---
 
 ## 1. Funciones de Fecha y Hora
