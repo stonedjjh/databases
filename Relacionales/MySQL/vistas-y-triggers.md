@@ -296,6 +296,14 @@ END //
 DELIMITER ;
 ```
 
+> [!IMPORTANT]
+> **Limitación Crítica de `CURRENT_USER()` en Aplicaciones Modernas:**
+> La función `CURRENT_USER()` devuelve el **usuario del motor de base de datos** con el que se abrió la conexión (por ejemplo, `'app_backend'@'localhost'`).
+>
+> En las arquitecturas web y APIs actuales (Node.js, Laravel, Python, Spring, etc.), **todas las peticiones HTTP de todos los usuarios del sistema usan un único pool de conexiones con el mismo usuario de base de datos**. Si guardas `CURRENT_USER()` en un trigger, todas las filas registrarán invariablemente `'app_backend'@'localhost'`, haciendo imposible saber qué persona física o empleado real hizo el cambio.
+>
+> Para una auditoría real de negocio, la aplicación backend debe pasar el identificador del usuario de la sesión (`usuario_id` o `email`) como columna explícita o mediante variables de sesión (`SET @usuario_app_id = 45;`), aunque dicha coordinación requiere lógica en la capa de software backend.
+
 ---
 
 ### Validaciones de Dominio y Modificación al Vuelo con `BEFORE INSERT`

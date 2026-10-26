@@ -11,11 +11,13 @@ Guía de referencia rápida de comandos, funciones de uso frecuente y variables 
 - [0. Taxonomía Formal de Comandos SQL (DDL, DML, DQL, DCL, TCL)](#0-taxonomía-formal-de-comandos-sql-ddl-dml-dql-dcl-tcl)
 - [1. Funciones de Fecha y Hora](#1-funciones-de-fecha-y-hora)
   - [`NOW()`](#now)
-- [2. Variables de Sistema y Diagnóstico (`@@`)](#2-variables-de-sistema-y-diagnóstico-)
+- [2. Funciones del Sistema e Información](#2-funciones-del-sistema-e-información)
+  - [`CURRENT_USER()`](#current_user)
+- [3. Variables de Sistema y Diagnóstico (`@@`)](#3-variables-de-sistema-y-diagnóstico-)
   - [El Prefijo `@@`: Variables de Sistema vs Variables de Usuario](#el-prefijo--variables-de-sistema-vs-variables-de-usuario)
   - [`@@datadir`](#datadir)
   - [`@@lower_case_table_names`](#lower_case_table_names)
-- [3. Diagnóstico Rápido de Sesión y Servidor](#3-diagnóstico-rápido-de-sesión-y-servidor)
+- [4. Diagnóstico Rápido de Sesión y Servidor](#4-diagnóstico-rápido-de-sesión-y-servidor)
 
 ---
 
@@ -82,7 +84,34 @@ SELECT NOW();
 
 ---
 
-## 2. Variables de Sistema y Diagnóstico (`@@`)
+## 2. Funciones del Sistema e Información
+
+### `CURRENT_USER()`
+
+Devuelve el nombre de la cuenta de usuario autenticada con la que el cliente actual se conectó al servidor de MySQL, junto con el host desde el cual se estableció la conexión (formato: `'usuario'@'host'`).
+
+#### Sintaxis básica
+
+```sql
+SELECT CURRENT_USER();
+-- Ejemplo de retorno: 'root'@'localhost' o 'app_backend'@'192.168.1.10'
+```
+
+#### Diferencia Crítica: Usuario de Base de Datos vs Usuario de la Aplicación
+
+> [!WARNING]
+> `CURRENT_USER()` identifica **únicamente la credencial del motor relacional**, NO al usuario final o persona física que utiliza la aplicación de software.
+>
+> 1. **En aplicaciones web y APIs modernas (Arquitectura de Connection Pooling):**
+>    - La aplicación (Node.js, Laravel, Django, Spring Boot, etc.) abre un conjunto de conexiones reutilizables utilizando **un solo usuario de base de datos** (ej. `'app_backend'@'localhost'`).
+>    - Si 10.000 usuarios distintos inician sesión en la web, todas sus consultas SQL se ejecutan en la base de datos bajo esa misma cuenta de conexión (`'app_backend'@'localhost'`).
+>    - Por tanto, si usas `CURRENT_USER()` dentro de un Trigger o procedimiento de auditoría, **siempre obtendrás el nombre del backend**, perdiendo el rastro de qué cliente o administrador real realizó la modificación.
+> 2. **Solución Arquitectónica en Backend:**
+>    - Para registrar auditorías por usuario de la aplicación, el software backend debe enviar explícitamente el `usuario_id` o `email` del usuario logueado en una columna de la tabla (`modificado_por_usuario_id`) o establecer una variable de sesión antes de operar (`SET @app_user_id = 142;`).
+
+---
+
+## 3. Variables de Sistema y Diagnóstico (`@@`)
 
 ### El Prefijo `@@`: Variables de Sistema vs Variables de Usuario
 
@@ -160,7 +189,7 @@ ERROR 1146 (42S02): Table 'tienda.Usuarios' doesn't exist (la tabla física en d
 
 ---
 
-## 3. Diagnóstico Rápido de Sesión y Servidor
+## 4. Diagnóstico Rápido de Sesión y Servidor
 
 Consulta combinada recomendada para auditar rápidamente el entorno de trabajo actual:
 
